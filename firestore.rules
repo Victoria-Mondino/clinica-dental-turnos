@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Turnos: lectura pública (landing y panel los necesitan en tiempo real).
+    // Creación abierta pero validada campo por campo.
+    // Update solo puede tocar "estado" (cancelar un turno).
+    // Delete deshabilitado: un turno cancelado sigue existiendo con estado "cancelado".
+    match /appointments/{appointmentId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly([
+          'codigo', 'servicio', 'duracion', 'prepaga', 'profesional',
+          'fecha', 'hora', 'nombre', 'telefono', 'email', 'estado', 'createdAt'
+        ])
+        && request.resource.data.codigo is string
+        && request.resource.data.servicio is string
+        && request.resource.data.prepaga is string
+        && request.resource.data.profesional is string
+        && request.resource.data.fecha is string
+        && request.resource.data.hora is string
+        && request.resource.data.nombre is string
+        && request.resource.data.telefono is string
+        && request.resource.data.estado in ['confirmado', 'cancelado'];
+
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado'])
+        && request.resource.data.estado in ['confirmado', 'cancelado'];
+
+      allow delete: if false;
+    }
+
+    // Bloqueos de agenda: lectura pública, escritura y borrado abiertos
+    // (uso interno del panel, protegido por el link no listado hasta sumar login).
+    match /blockedSlots/{blockId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly([
+          'fecha', 'profesional', 'diaCompleto', 'hora', 'duracion', 'motivo'
+        ])
+        && request.resource.data.fecha is string
+        && request.resource.data.profesional is string
+        && request.resource.data.diaCompleto is bool;
+      allow update: if false;
+      allow delete: if true;
+    }
+  }
+}
